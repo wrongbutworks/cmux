@@ -33,32 +33,14 @@ extension TerminalSurface {
     }
 
     /// Returns whether a backing-pixel resize should be forwarded to Ghostty.
-    ///
-    /// Ghostty uses one surface-size API for both renderer pixels and PTY
-    /// geometry. During AppKit live resize, pixel churn can arrive without a
-    /// terminal grid change; coalescing those pixel-only updates avoids
-    /// redundant PTY resizes while preserving ordinary layout and scale changes.
-    ///
-    /// - Parameter currentColumns: The current terminal grid column count.
-    /// - Parameter currentRows: The current terminal grid row count.
-    /// - Parameter currentWidthPx: The current raw surface width in pixels.
-    /// - Parameter currentHeightPx: The current raw surface height in pixels.
-    /// - Parameter currentCellWidthPx: The current terminal cell width in pixels.
-    /// - Parameter currentCellHeightPx: The current terminal cell height in pixels.
-    /// - Parameter targetWidthPx: The candidate surface width in pixels.
-    /// - Parameter targetHeightPx: The candidate surface height in pixels.
-    /// - Parameter coalescePixelOnlyResize: Whether same-grid pixel-only resizes should be skipped.
-    /// - Parameter hasAppliedPixelSize: Whether a previous runtime pixel size has been applied.
-    /// - Returns: `true` when Ghostty should receive the new pixel size.
+    /// During AppKit live resize, the embedded runtime predicts its exact target
+    /// grid with the active padding configuration. Same-grid pixel churn can
+    /// then be skipped without guessing at a possible padding remainder.
     public static func shouldApplySurfacePixelSizeChange(
         currentColumns: UInt32,
         currentRows: UInt32,
-        currentWidthPx: UInt32,
-        currentHeightPx: UInt32,
-        currentCellWidthPx: UInt32,
-        currentCellHeightPx: UInt32,
-        targetWidthPx: UInt32,
-        targetHeightPx: UInt32,
+        targetColumns: UInt32,
+        targetRows: UInt32,
         coalescePixelOnlyResize: Bool,
         hasAppliedPixelSize: Bool
     ) -> Bool {
@@ -66,44 +48,11 @@ extension TerminalSurface {
         guard coalescePixelOnlyResize else { return true }
         guard currentColumns > 0,
               currentRows > 0,
-              currentCellWidthPx > 0,
-              currentCellHeightPx > 0 else {
+              targetColumns > 0,
+              targetRows > 0 else {
             return true
         }
-
-        let cellWidth = UInt64(currentCellWidthPx)
-        let cellHeight = UInt64(currentCellHeightPx)
-        let currentColumnCount = UInt64(currentColumns)
-        let currentRowCount = UInt64(currentRows)
-        func mayChangeGrid(
-            currentCount: UInt64,
-            currentPixels: UInt64,
-            cellPixels: UInt64,
-            targetPixels: UInt64
-        ) -> Bool {
-            let currentGridPixels = currentCount * cellPixels
-            guard targetPixels >= currentGridPixels else { return true }
-
-            let nextGridPixels = currentGridPixels + cellPixels
-            let paddingLower = currentPixels >= nextGridPixels ? currentPixels - nextGridPixels + 1 : 0
-            let paddingUpper = currentPixels > currentGridPixels ? currentPixels - currentGridPixels : 0
-            let unchangedLower = targetPixels >= nextGridPixels ? targetPixels - nextGridPixels + 1 : 0
-            let unchangedUpper = targetPixels - currentGridPixels
-            // Coalesce only when every padding value compatible with the current grid stays same-grid.
-            return unchangedLower > paddingLower || unchangedUpper < paddingUpper
-        }
-
-        return mayChangeGrid(
-            currentCount: currentColumnCount,
-            currentPixels: UInt64(currentWidthPx),
-            cellPixels: cellWidth,
-            targetPixels: UInt64(targetWidthPx)
-        ) || mayChangeGrid(
-            currentCount: currentRowCount,
-            currentPixels: UInt64(currentHeightPx),
-            cellPixels: cellHeight,
-            targetPixels: UInt64(targetHeightPx)
-        )
+        return currentColumns != targetColumns || currentRows != targetRows
     }
 
     /// Applies a new backing size/scale to the runtime surface.
@@ -191,15 +140,12 @@ extension TerminalSurface {
             // must run before any DECAWM toggling below so a coalesced (skipped)
             // resize never leaves a manual-I/O pane with DECAWM disabled.
             let currentSize = ghostty_surface_size(surface)
+            let targetSize = ghostty_surface_size_for_pixels(surface, wpx, hpx)
             let shouldApplySizeChange = Self.shouldApplySurfacePixelSizeChange(
                 currentColumns: UInt32(currentSize.columns),
                 currentRows: UInt32(currentSize.rows),
-                currentWidthPx: currentSize.width_px,
-                currentHeightPx: currentSize.height_px,
-                currentCellWidthPx: currentSize.cell_width_px,
-                currentCellHeightPx: currentSize.cell_height_px,
-                targetWidthPx: wpx,
-                targetHeightPx: hpx,
+                targetColumns: UInt32(targetSize.columns),
+                targetRows: UInt32(targetSize.rows),
                 coalescePixelOnlyResize: coalescePixelOnlyResize && !scaleChanged,
                 hasAppliedPixelSize: lastPixelWidth > 0 && lastPixelHeight > 0
             )
