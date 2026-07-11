@@ -12,8 +12,9 @@ When we change the fork, update this document and the parent submodule SHA.
 
 ## Current fork changes
 
-Current cmux pinned fork head: `e215e78bf`. It combines the previous cmux pin
-`dd726a9a6`, current fork `main` (`8495e581a`), and upstream
+Current cmux pinned fork head: `ade58ce70`. It adds a non-mutating embedded
+target-grid prediction API on top of `e215e78bf`, which combines the previous
+cmux pin `dd726a9a6`, current fork `main` (`8495e581a`), and upstream
 `ghostty-org/ghostty` `main` through `7e02af879` (2026-07-09), followed by the
 render-grid preserved-page OOM fix, lock-free selection notifications, and
 compressed-storage-preserving full scrollback reads.
@@ -22,7 +23,9 @@ https://github.com/manaflow-ai/ghostty/pull/96 and
 https://github.com/manaflow-ai/ghostty/pull/99 and
 https://github.com/manaflow-ai/ghostty/pull/104 and
 https://github.com/manaflow-ai/ghostty/pull/105 and
-https://github.com/manaflow-ai/ghostty/pull/106.
+https://github.com/manaflow-ai/ghostty/pull/106. The grid prediction change is
+published on
+https://github.com/manaflow-ai/ghostty/tree/fix/embedded-grid-size-prediction.
 
 ### Upstream TLDR (`d560c645..7e02af879`)
 
@@ -76,6 +79,10 @@ https://github.com/manaflow-ai/ghostty/pull/106.
    and frees them after formatting, so full `read-screen` and clipboard reads
    no longer make cold history resident. Temporary decode allocation failures
    propagate as `OutOfMemory` through Zig and C formatter APIs.
+9. `ghostty_surface_size_for_pixels` applies the live surface's exact explicit
+   and balanced-padding rules to target screen pixels without mutating the
+   surface. cmux uses the predicted grid to suppress same-grid PTY resize
+   signals during live window drags.
 
 Verified with Zig 0.15.2: compression, formatter, selection activity, and
 libghostty-vt compression tests,
