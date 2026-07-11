@@ -45,6 +45,7 @@ void ghostty_surface_set_occlusion(void);
 void ghostty_surface_set_renderer_realized(void);
 void ghostty_surface_set_size(void);
 void ghostty_surface_size(void);
+void ghostty_surface_size_for_pixels(void);
 void ghostty_surface_text(void);
 void ghostty_surface_text_input(void);
 ghostty_string_s ghostty_surface_tty_name(void *surface);
